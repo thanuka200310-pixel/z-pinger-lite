@@ -1,4 +1,4 @@
-name: Build Z-Pinger Lite APK
+name: Build Native Z-Pinger Lite APK
 
 on:
   push:
@@ -6,334 +6,86 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Java JDK 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
+      - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.4'
 
-      - name: Install SDK Packages & Cordova
+      - name: Generate Native Android Project
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          npm install -g cordova
+          mkdir -p app/src/main/java/com/zpinger/lite
+          mkdir -p app/src/main/assets
 
-      - name: Create Cordova Project & Inject Ultra-Lite Code
-        run: |
-          cordova create app com.zpinger.ultralite "Z-Pinger Lite"
-          cd app
-
-          # Configure config.xml for zero restrictions and background keep-alive
-          cat << 'EOF' > config.xml
-          <?xml version='1.0' encoding='utf-8'?>
-          <widget id="com.zpinger.ultralite" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-              <name>Z-Pinger Lite</name>
-              <description>Ultra Battery Saver Network Pinger</description>
-              <author>Z-Pinger</author>
-              <content src="index.html" />
-              <access origin="*" />
-              <allow-intent href="http://*/*" />
-              <allow-intent href="https://*/*" />
-              <preference name="DisallowOverscroll" value="true" />
-              <preference name="BackgroundColor" value="0xff000000"/>
-              <preference name="KeepRunning" value="true"/>
-              <preference name="AndroidLaunchMode" value="singleInstance"/>
-          </widget>
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "ZPingerLite"
+          include ':app'
           EOF
 
-          # Create the Single-File Ultra Battery Saver HTML/JS
-          cat << 'EOF' > www/index.html
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-              <title>Z-Pinger Lite</title>
-              <style>
-                  /* Pure AMOLED Black - 0% GPU Usage - No Animations */
-                  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-                  body {
-                      background-color: #000000;
-                      color: #cccccc;
-                      font-family: monospace;
-                      padding: 20px;
-                      height: 100vh;
-                      display: flex;
-                      flex-direction: column;
-                      justify-content: space-between;
-                  }
-                  .header { border-bottom: 1px solid #222; padding-bottom: 10px; }
-                  .title { font-size: 20px; color: #00ff66; font-weight: bold; }
-                  .sub { font-size: 11px; color: #666; margin-top: 4px; }
-                  
-                  .stats-box {
-                      display: grid;
-                      grid-template-columns: 1fr 1fr;
-                      gap: 10px;
-                      margin: 15px 0;
-                  }
-                  .stat {
-                      background: #0a0a0a;
-                      border: 1px solid #1a1a1a;
-                      padding: 12px;
-                      border-radius: 6px;
-                      text-align: center;
-                  }
-                  .stat-val { font-size: 22px; color: #fff; font-weight: bold; }
-                  .stat-lbl { font-size: 11px; color: #555; margin-top: 4px; }
-
-                  .controls label { display: block; font-size: 12px; color: #888; margin-top: 10px; }
-                  .controls select, .controls input {
-                      width: 100%;
-                      background: #0f0f0f;
-                      border: 1px solid #222;
-                      color: #ddd;
-                      padding: 10px;
-                      margin-top: 5px;
-                      border-radius: 4px;
-                      font-family: monospace;
-                  }
-
-                  .log-box {
-                      background: #050505;
-                      border: 1px solid #151515;
-                      padding: 10px;
-                      height: 110px;
-                      font-size: 11px;
-                      color: #00cc52;
-                      overflow: hidden;
-                      margin: 15px 0;
-                      line-height: 1.6;
-                  }
-
-                  .btn-group { display: flex; gap: 10px; }
-                  button {
-                      flex: 1;
-                      padding: 15px;
-                      border: none;
-                      border-radius: 6px;
-                      font-family: monospace;
-                      font-size: 15px;
-                      font-weight: bold;
-                      cursor: pointer;
-                  }
-                  #startBtn { background: #005522; color: #00ff66; border: 1px solid #00aa44; }
-                  #startBtn.active { background: #550000; color: #ff4444; border: 1px solid #aa0000; }
-                  #dimBtn { background: #111; color: #888; border: 1px solid #222; flex: 0.4; }
-
-                  /* Pocket Mode (Screen Blackout) */
-                  #blackout {
-                      display: none;
-                      position: fixed;
-                      top: 0; left: 0; width: 100%; height: 100%;
-                      background: #000000;
-                      z-index: 9999;
-                      color: #222;
-                      justify-content: center;
-                      align-items: center;
-                      font-size: 12px;
-                  }
-              </style>
-          </head>
-          <body>
-
-              <div id="blackout" onclick="toggleBlackout()">
-                  [ Double Tap to Wake Screen - Pinger Running ]
-              </div>
-
-              <div>
-                  <div class="header">
-                      <div class="title">Z-PINGER LITE [0% GPU]</div>
-                      <div class="sub">Ultra Battery Saver & Anti-Heat Edition</div>
-                  </div>
-
-                  <div class="stats-box">
-                      <div class="stat">
-                          <div class="stat-val" id="pingVal">-- ms</div>
-                          <div class="stat-lbl">LATENCY</div>
-                      </div>
-                      <div class="stat">
-                          <div class="stat-val" id="countVal">0</div>
-                          <div class="stat-lbl">TOTAL PINGS</div>
-                      </div>
-                  </div>
-
-                  <div class="controls">
-                      <label>TARGET ENDPOINT (204 LIGHTWEIGHT):</label>
-                      <select id="targetUrl">
-                          <option value="http://connectivitycheck.gstatic.com/generate_204">Google 204 (HTTP - Lowest Battery)</option>
-                          <option value="https://connectivitycheck.gstatic.com/generate_204">Google 204 (HTTPS)</option>
-                          <option value="http://cp.cloudflare.com/generate_204">Cloudflare 204 (Fast)</option>
-                      </select>
-
-                      <label>PING INTERVAL (HIGHER = LESS HEAT):</label>
-                      <select id="interval">
-                          <option value="10000">Every 10 Seconds (Recommended)</option>
-                          <option value="15000">Every 15 Seconds (Eco Mode)</option>
-                          <option value="30000">Every 30 Seconds (Ultra Saver)</option>
-                          <option value="5000">Every 5 Seconds (Aggressive)</option>
-                      </select>
-                  </div>
-
-                  <div class="log-box" id="logs">
-                      System Ready. Zero-heat architecture loaded.<br>
-                      Press START to keep connection alive.
-                  </div>
-              </div>
-
-              <div class="btn-group">
-                  <button id="startBtn" onclick="togglePinger()">START PINGER</button>
-                  <button id="dimBtn" onclick="toggleBlackout()">OLED OFF</button>
-              </div>
-
-              <script>
-                  let isRunning = false;
-                  let timer = null;
-                  let pingCount = 0;
-                  let logHistory = [];
-                  let audioCtx = null;
-                  let wakeLock = null;
-
-                  // Silent Audio Trick: Keeps Android WebView alive in background with 0% CPU
-                  function enableBackgroundKeepAlive() {
-                      try {
-                          if (!audioCtx) {
-                              audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                          }
-                          const osc = audioCtx.createOscillator();
-                          const gain = audioCtx.createGain();
-                          gain.gain.value = 0.00001; // Completely silent
-                          osc.connect(gain);
-                          gain.connect(audioCtx.destination);
-                          osc.start();
-                      } catch (e) {}
-
-                      if ('wakeLock' in navigator) {
-                          navigator.wakeLock.request('screen').then(lock => wakeLock = lock).catch(()=>{});
-                      }
-                  }
-
-                  function disableBackgroundKeepAlive() {
-                      if (audioCtx) {
-                          audioCtx.close().catch(()=>{});
-                          audioCtx = null;
-                      }
-                      if (wakeLock) {
-                          wakeLock.release().catch(()=>{});
-                          wakeLock = null;
-                      }
-                  }
-
-                  function addLog(msg) {
-                      // Smart DOM: Do not render UI if screen is off or minimized
-                      if (document.hidden || document.getElementById('blackout').style.display === 'flex') return;
-                      
-                      logHistory.push(msg);
-                      if (logHistory.length > 4) logHistory.shift(); // Keep only 4 lines in memory
-                      document.getElementById('logs').innerHTML = logHistory.join('<br>');
-                  }
-
-                  async function doPing() {
-                      if (!isRunning) return;
-
-                      const url = document.getElementById('targetUrl').value;
-                      const waitTime = parseInt(document.getElementById('interval').value, 10);
-                      const startTime = performance.now();
-
-                      try {
-                          const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-                          await fetch(url + "?t=" + Date.now(), {
-                              method: 'HEAD',
-                              mode: 'no-cors',
-                              cache: 'no-store',
-                              signal: controller.signal
-                          });
-
-                          clearTimeout(timeoutId);
-                          const ms = Math.round(performance.now() - startTime);
-                          pingCount++;
-
-                          // Only touch DOM if visible
-                          if (!document.hidden && document.getElementById('blackout').style.display !== 'flex') {
-                              document.getElementById('pingVal').textContent = ms + ' ms';
-                              document.getElementById('countVal').textContent = pingCount;
-                              const timeStr = new Date().toLocaleTimeString();
-                              addLog(`[${timeStr}] 204 OK - ${ms}ms`);
-                          }
-                      } catch (err) {
-                          if (!document.hidden) {
-                              document.getElementById('pingVal').textContent = 'TIMEOUT';
-                              addLog(`[!] Ping drop / Reconnecting...`);
-                          }
-                      }
-
-                      if (isRunning) {
-                          timer = setTimeout(doPing, waitTime);
-                      }
-                  }
-
-                  function togglePinger() {
-                      const btn = document.getElementById('startBtn');
-                      if (!isRunning) {
-                          isRunning = true;
-                          btn.textContent = 'STOP PINGER';
-                          btn.classList.add('active');
-                          enableBackgroundKeepAlive();
-                          addLog('Pinger Started (Low-Power Mode)...');
-                          doPing();
-                      } else {
-                          isRunning = false;
-                          clearTimeout(timer);
-                          btn.textContent = 'START PINGER';
-                          btn.classList.remove('active');
-                          disableBackgroundKeepAlive();
-                          addLog('Pinger Stopped.');
-                      }
-                  }
-
-                  function toggleBlackout() {
-                      const el = document.getElementById('blackout');
-                      if (el.style.display === 'flex') {
-                          el.style.display = 'none';
-                          document.getElementById('countVal').textContent = pingCount;
-                      } else {
-                          el.style.display = 'flex';
-                      }
-                  }
-              </script>
-          </body>
-          </html>
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+          }
           EOF
 
-      - name: Add Android Platform & Build APK
-        working-directory: ./app
-        run: |
-          cordova platform add android@13.0.0
-          cordova build android --debug
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.zpinger.lite'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.zpinger.lite"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
 
-      - name: Upload APK to Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Z-Pinger-Lite-APK
-          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <application
+                  android:label="Z-Pinger Lite"
+                  android:usesCleartextTraffic="true"
+                  android:hardwareAccelerated="false"
+                  android:theme="@android:style/Theme.Black.NoTitleBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleInstance"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" 
